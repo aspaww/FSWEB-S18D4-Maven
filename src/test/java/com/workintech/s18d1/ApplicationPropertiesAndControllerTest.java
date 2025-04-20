@@ -23,18 +23,17 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-
-@WebMvcTest(controllers = {BurgerController.class, GlobalExceptionHandler.class,ApplicationPropertiesAndControllerTest.class})
+@WebMvcTest(controllers = {BurgerController.class, GlobalExceptionHandler.class})
 @ExtendWith(ResultAnalyzer.class)
 class ApplicationPropertiesAndControllerTest {
 
@@ -47,10 +46,10 @@ class ApplicationPropertiesAndControllerTest {
     @MockBean
     private BurgerDao burgerDao;
 
-    private Burger sampleBurger;
-
     @Autowired
     private ObjectMapper objectMapper;
+
+    private Burger sampleBurger;
 
     @BeforeEach
     void setUp() {
@@ -63,40 +62,23 @@ class ApplicationPropertiesAndControllerTest {
         sampleBurger.setContents("Beef, Lettuce, Tomato, Cheese");
     }
 
-
     @Test
     @DisplayName("application properties istenilenler eklendi mi?")
-    void serverPortIsSetTo8585() {
-
-        String serverPort = env.getProperty("server.port");
-        assertThat(serverPort).isEqualTo("9000");
-
-
-
-        String datasourceUrl = env.getProperty("spring.datasource.url");
-        assertNotNull(datasourceUrl);
-
-        String datasourceUsername = env.getProperty("spring.datasource.username");
-        assertNotNull(datasourceUsername);
-
-        String datasourcePassword = env.getProperty("spring.datasource.password");
-        assertNotNull(datasourcePassword);
-
-        String hibernateDdlAuto = env.getProperty("spring.jpa.hibernate.ddl-auto");
-        assertNotNull(hibernateDdlAuto);
-
-        String hibernateSql = env.getProperty("logging.level.org.hibernate.SQL");
-        assertNotNull(hibernateSql);
-
-        String hibernateJdbcBind = env.getProperty("logging.level.org.hibernate.jdbc.bind");
-        assertNotNull(hibernateJdbcBind);
-
+    void serverPortIsSetTo9000() {
+        assertThat(env.getProperty("server.port")).isEqualTo("9000");
+        assertNotNull(env.getProperty("spring.datasource.url"));
+        assertNotNull(env.getProperty("spring.datasource.username"));
+        assertNotNull(env.getProperty("spring.datasource.password"));
+        assertNotNull(env.getProperty("spring.jpa.hibernate.ddl-auto"));
+        assertNotNull(env.getProperty("logging.level.org.hibernate.SQL"));
+        assertNotNull(env.getProperty("logging.level.org.hibernate.jdbc.bind"));
     }
 
     @Test
     @DisplayName("Burger not found exception test")
     void testBurgerNotFoundException() throws Exception {
-        given(burgerDao.findById(anyLong())).willThrow(new BurgerException("Burger not found", HttpStatus.NOT_FOUND));
+        given(burgerDao.findById(anyLong()))
+                .willThrow(new BurgerException("Burger not found", HttpStatus.NOT_FOUND));
 
         mockMvc.perform(get("/burger/{id}", 1L))
                 .andExpect(status().isNotFound())
@@ -107,7 +89,8 @@ class ApplicationPropertiesAndControllerTest {
     @Test
     @DisplayName("Generic exception test")
     void testGenericException() throws Exception {
-        given(burgerDao.findById(anyLong())).willThrow(new RuntimeException("Unexpected error"));
+        given(burgerDao.findById(anyLong()))
+                .willThrow(new RuntimeException("Unexpected error"));
 
         mockMvc.perform(get("/burger/{id}", 2L))
                 .andExpect(status().isInternalServerError())
@@ -152,28 +135,26 @@ class ApplicationPropertiesAndControllerTest {
     @Test
     @DisplayName("Update burger test")
     void testUpdateBurger() throws Exception {
-        Burger updatedBurger = new Burger();
-        updatedBurger.setId(1L);
-        updatedBurger.setName("Updated Classic Burger");
-        given(burgerDao.update(any())).willReturn(updatedBurger);
+        Burger updated = new Burger();
+        updated.setId(1L);
+        updated.setName("Updated Classic Burger");
+        given(burgerDao.update(any())).willReturn(updated);
 
         mockMvc.perform(put("/burger")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedBurger)))
+                        .content(objectMapper.writeValueAsString(updated)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name", is(updatedBurger.getName())));
+                .andExpect(jsonPath("$.name", is(updated.getName())));
     }
 
     @Test
     @DisplayName("Remove burger test")
     void testRemoveBurger() throws Exception {
-
         given(burgerDao.remove(sampleBurger.getId())).willReturn(sampleBurger);
 
         mockMvc.perform(delete("/burger/{id}", sampleBurger.getId()))
                 .andExpect(status().isOk());
     }
-
 
     @Test
     @DisplayName("Find by bread type test")
@@ -191,9 +172,10 @@ class ApplicationPropertiesAndControllerTest {
     @DisplayName("Find by price test")
     void testFindByPrice() throws Exception {
         List<Burger> burgers = Arrays.asList(sampleBurger);
-        given(burgerDao.findByPrice(sampleBurger.getPrice().intValue())).willReturn(burgers);
+        // primitive double, .intValue() yerine doğrudan kullanıyoruz
+        given(burgerDao.findByPrice(sampleBurger.getPrice())).willReturn(burgers);
 
-        mockMvc.perform(get("/burger/price/{price}", sampleBurger.getPrice().intValue()))
+        mockMvc.perform(get("/burger/price/{price}", sampleBurger.getPrice()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].name", is(sampleBurger.getName())));
@@ -211,5 +193,3 @@ class ApplicationPropertiesAndControllerTest {
                 .andExpect(jsonPath("$[0].contents", containsString("Cheese")));
     }
 }
-
-
